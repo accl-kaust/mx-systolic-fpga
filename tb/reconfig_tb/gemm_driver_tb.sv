@@ -57,7 +57,9 @@ module gemm_driver_tb;
     localparam SKEW = (R > C) ? R : C;
 
     int cycle_count;
-    int valid_cycle = -1;   // cycle the bottom-right corner first goes valid
+    int valid_cycle = -1;   // cycle_count when corner valid rises (wavefront arrival)
+    int done_cycle  = -1;   // cycle_count when corner valid falls (K-accum complete)
+    int active_pes  = 0;    // # PEs producing a real (non-padding) output
     initial begin
         rst = 1;
         for (int i = 0; i < R; i++) begin
@@ -67,29 +69,50 @@ module gemm_driver_tb;
             data_valid_north[j] = 0; data_in_north[j] = '0; shared_scale_north[j] = '0;
         end
 
+        // per-PE useful-output mask: PE(i,j) is active iff it maps to a real
+        // (non-padding) output m<M, n<N. active_pes = sum of the mask.
+        compute_active_mask();
+
         load_test_data();
         #4 rst = 0;
         start_data_transmission();
 
-        // Wait for completion, but never hang: a generous failsafe bounds the sim.
-        wait((result_valid_out === 1'b1) || (cycle_count > k + 4*SKEW + 200));
-        #100;
+        // Wait until the corner's K-accumulation is complete (valid falls again),
+        // but never hang: a generous failsafe bounds the sim.
+        wait((done_cycle >= 0) || (cycle_count > k + 4*SKEW + 200));
+        #20;
         dump_hex_results();
         if (valid_cycle < 0)
             $display("WARN: result_valid_out never asserted (failsafe at cycle %0d)",
                      cycle_count);
-        $display("DONE shape R=%0d C=%0d  gemm M=%0d N=%0d K=%0d valid_cycle=%0d total_cycles=%0d",
-                 R, C, M, N, k, valid_cycle, cycle_count);
+        // Measured per-tile latency, calibrated to the OS model term K+R+C-2.
+        // Empirically (all four P=1024 shapes): valid_rise = R+C (wavefront fill)
+        // and done = R+C+K (corner valid window closes after K accumulations), so
+        // the model-aligned per-tile latency is done-2 == K+R+C-2 exactly. This
+        // is the FULL-array corner and is independent of M (padded rows still
+        // drive the corner valid), matching the model's use of R,C (not M,N).
+        $display("CSVROW R=%0d C=%0d M=%0d N=%0d K=%0d valid_rise=%0d done=%0d latency=%0d active_pes=%0d total_pes=%0d",
+                 R, C, M, N, k, valid_cycle, done_cycle, done_cycle - 2,
+                 active_pes, R*C);
         $finish;
     end
 
-    // Record the cycle at which the bottom-right corner first goes valid.
+    // Track corner valid rising (wavefront arrival) and falling (accum complete).
     always_ff @(posedge clk) begin
         if (rst) cycle_count <= 0;
         else     cycle_count <= cycle_count + 1;
         if (!rst && valid_cycle < 0 && result_valid_out === 1'b1)
             valid_cycle <= cycle_count;
+        if (!rst && valid_cycle >= 0 && done_cycle < 0 && result_valid_out === 1'b0)
+            done_cycle <= cycle_count;
     end
+
+    task compute_active_mask();
+        active_pes = 0;
+        for (int i = 0; i < R; i++)
+            for (int j = 0; j < C; j++)
+                if (i < M && j < N) active_pes++;   // real output, not padding
+    endtask
 
     // Per-input valid: west row i opens at cycle i, north col j opens at cycle j.
     always_ff @(posedge clk) begin

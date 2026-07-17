@@ -49,7 +49,7 @@ cd mx-systolic-fpga
 ```
 2. Explore the Design
 
-Review src/ for RTL implementations of PEs and top modules.
+Review src/ folder for RTL implementations of PEs and top modules.
 
 Choose the accumulation type (exact or bf16) and pipeline depth required.
 

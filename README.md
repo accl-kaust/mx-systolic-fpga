@@ -64,3 +64,25 @@ The data/ folder holds sample data points for each data type with the result fil
 ### 📄 Notes
 
 The PE module name is the same across different pipeline variants — include only one in your synthesis project.
+
+## Publication
+
+If you use this work, please do cite us
+
+```bibtex
+@article{abdurakhmanov2025mx,
+  author    = {Abdurauf Abdurakhmanov and Suhaib A. Fahmy},
+  title     = {Exploring Microscaling {MX} Minifloat Systolic Arrays on {FPGA}s},
+  journal   = {ACM Transactions on Reconfigurable Technology and Systems},
+  volume    = {18},
+  number    = {4},
+  articleno = {55},
+  numpages  = {23},
+  year      = {2025},
+  month     = dec,
+  publisher = {ACM},
+  issn      = {1936-7406},
+  doi       = {10.1145/3773041},
+  url       = {https://doi.org/10.1145/3773041},
+}
+```
